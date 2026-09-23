@@ -16,7 +16,8 @@
     "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
     "make-admin": "node --disable-warning=ExperimentalWarning scripts/make-admin.js",
     "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 server/test/*.test.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "bench": "node --disable-warning=ExperimentalWarning scripts/bench.js"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

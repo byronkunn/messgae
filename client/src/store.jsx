@@ -195,6 +195,10 @@ export function AppProvider({ children }) {
       }
     } else if (e.type === 'read:self') {
       setConversations((list) => list?.map((c) => (c.id === e.conversationId ? { ...c, unread: 0 } : c)));
+      if (!conversations?.some((c) => c.id === e.conversationId)) {
+        clearTimeout(spacesTimer.current);
+        spacesTimer.current = setTimeout(refreshSpaces, 500);
+      }
     } else if (e.type === 'notification') {
       setMe((m) => (m ? { ...m, unread: { ...m.unread, notifications: (m.unread?.notifications || 0) + 1 } } : m));
       const n = e.notification;

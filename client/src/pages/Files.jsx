@@ -87,6 +87,10 @@ export default function FilesPage() {
   const [openMenu, menu] = useMenu();
   const inputRef = useRef(null);
 
+  useEffect(() => {
+    document.querySelector('.chips .chip.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [category]);
+
   const load = useCallback(async () => {
     if (category === 'shared') return;
     try {

@@ -73,8 +73,8 @@ function PrivilegeBadge() {
     return () => clearInterval(t);
   }, []);
   const until = me.session?.elevatedUntil;
-  if (until && until > now) return <span className="tag warn" title="Privileged session active">Privileged · {Math.ceil((until - now) / 60000)}m</span>;
-  return <button className="btn btn-sm btn-ghost" onClick={async () => { if (await elevate()) refreshMe(); }}><Icon name="lock" className="icon-sm" /> Elevate</button>;
+  if (until && until > now) return <span className="tag warn" title="Privileged session active"><span className="hide-mobile">Privileged ·&nbsp;</span>{Math.ceil((until - now) / 60000)}m</span>;
+  return <button className="btn btn-sm btn-ghost" title="Start a privileged session" onClick={async () => { if (await elevate()) refreshMe(); }}><Icon name="lock" className="icon-sm" /><span className="hide-mobile">Elevate</span></button>;
 }
 
 function Overview() {

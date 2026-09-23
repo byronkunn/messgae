@@ -89,47 +89,59 @@ export default function adminAnalytics(r, ctx) {
     const { from, to, bucket, range } = parseRange(req.query, '7d');
     const t = Date.now();
     const count = (sql, ...p) => n(db.value(sql, ...p));
-    const inRange = 'm.created_at >= ? AND m.created_at <= ?';
-    const activeByType = (type) => count(
-      `SELECT COUNT(DISTINCT m.conversation_id) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.type = ? AND ${inRange}`, type, from, to,
+    // One pass over the range, aggregated per conversation; everything else is derived from it.
+    const perConv = db.all(
+      `SELECT m.conversation_id AS id, COUNT(*) AS messages,
+         SUM(CASE WHEN m.kind IN ('media','voice') THEN 1 ELSE 0 END) AS media,
+         SUM(CASE WHEN m.kind = 'file' THEN 1 ELSE 0 END) AS files
+       FROM messages m WHERE m.created_at >= ? AND m.created_at <= ? GROUP BY m.conversation_id`,
+      from, to,
     );
-    const messages = count(`SELECT COUNT(*) FROM messages m WHERE ${inRange}`, from, to);
-    const senders = count(`SELECT COUNT(DISTINCT m.sender_id) FROM messages m WHERE ${inRange}`, from, to);
+    const convInfo = new Map();
+    const ids = perConv.map((c) => c.id);
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      for (const c of db.all(
+        `SELECT c.id, c.type, c.name, c.space_id, s.name AS space_name FROM conversations c LEFT JOIN spaces s ON s.id = c.space_id
+         WHERE c.id IN (${chunk.map(() => '?').join(',')})`, ...chunk,
+      )) convInfo.set(c.id, c);
+    }
+    const rows = perConv.map((c) => ({ ...c, ...convInfo.get(c.id) })).filter((c) => c.type);
+    const sum = (list, k) => list.reduce((a, r) => a + r[k], 0);
+    const messages = sum(rows, 'messages');
+    const senders = count('SELECT COUNT(DISTINCT sender_id) FROM messages WHERE created_at >= ? AND created_at <= ?', from, to);
+    const bySpace = new Map();
+    for (const r of rows) {
+      if (!r.space_id) continue;
+      const cur = bySpace.get(r.space_id) || { id: r.space_id, name: r.space_name, messages: 0 };
+      cur.messages += r.messages;
+      bySpace.set(r.space_id, cur);
+    }
     const kpis = {
       messagesToday: count('SELECT COUNT(*) FROM messages WHERE created_at > ?', t - DAY),
       messagesWeek: count('SELECT COUNT(*) FROM messages WHERE created_at > ?', t - 7 * DAY),
       messagesMonth: count('SELECT COUNT(*) FROM messages WHERE created_at > ?', t - 30 * DAY),
       messagesInRange: messages,
-      activeConversations: count(`SELECT COUNT(DISTINCT m.conversation_id) FROM messages m WHERE ${inRange}`, from, to),
-      activeDms: activeByType('dm'),
-      activeGroups: activeByType('group'),
-      activeChannels: activeByType('channel'),
-      activeSpaces: count(`SELECT COUNT(DISTINCT c.space_id) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.space_id IS NOT NULL AND ${inRange}`, from, to),
+      activeConversations: rows.length,
+      activeDms: rows.filter((r) => r.type === 'dm').length,
+      activeGroups: rows.filter((r) => r.type === 'group').length,
+      activeChannels: rows.filter((r) => r.type === 'channel').length,
+      activeSpaces: bySpace.size,
       activeUsers: senders,
       messagesPerActiveUser: senders ? Math.round((messages / senders) * 10) / 10 : 0,
-      mediaMessages: count(`SELECT COUNT(*) FROM messages m WHERE m.kind IN ('media','voice') AND ${inRange}`, from, to),
-      fileMessages: count(`SELECT COUNT(*) FROM messages m WHERE m.kind = 'file' AND ${inRange}`, from, to),
+      mediaMessages: sum(rows, 'media'),
+      fileMessages: sum(rows, 'files'),
     };
-    const rows = db.all(
+    const seriesRows = db.all(
       `SELECT CAST(m.created_at / ${bucket} AS INTEGER) AS b, COUNT(*) AS value,
          SUM(CASE WHEN c.type = 'dm' THEN 1 ELSE 0 END) AS dm,
          SUM(CASE WHEN c.type = 'group' THEN 1 ELSE 0 END) AS grp,
          SUM(CASE WHEN c.type = 'channel' THEN 1 ELSE 0 END) AS channel
-       FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE ${inRange} GROUP BY b`, from, to,
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE m.created_at >= ? AND m.created_at <= ? GROUP BY b`, from, to,
     );
-    // Rankings. DMs are shown by ID only — never by participants' names — in rankings.
-    const rank = (typeFilter, extra = '', order = 'messages') => db.all(
-      `SELECT c.id, c.type, c.name, c.space_id, s.name AS space_name, COUNT(m.id) AS messages,
-         SUM(CASE WHEN m.kind IN ('media','voice') THEN 1 ELSE 0 END) AS media,
-         SUM(CASE WHEN m.kind = 'file' THEN 1 ELSE 0 END) AS files
-       FROM messages m JOIN conversations c ON c.id = m.conversation_id LEFT JOIN spaces s ON s.id = c.space_id
-       WHERE ${inRange} ${typeFilter} GROUP BY c.id ${extra} ORDER BY ${order} DESC LIMIT 10`, from, to,
-    ).map((x) => ({ id: x.id, type: x.type, name: x.type === 'dm' ? `DM ${x.id.slice(-6)}` : x.name, spaceId: x.space_id, spaceName: x.space_name, messages: x.messages, media: x.media, files: x.files }));
-    const spaces = db.all(
-      `SELECT s.id, s.name, COUNT(m.id) AS messages FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN spaces s ON s.id = c.space_id
-       WHERE ${inRange} GROUP BY s.id ORDER BY messages DESC LIMIT 10`, from, to,
-    );
-    const span = to - from;
+    // Rankings. DMs are shown by ID only — never by participants' names.
+    const view = (x) => ({ id: x.id, type: x.type, name: x.type === 'dm' ? `DM ${x.id.slice(-6)}` : x.name, spaceId: x.space_id, spaceName: x.space_name, messages: x.messages, media: x.media, files: x.files });
+    const top = (list, key) => [...list].filter((r) => r[key] > 0).sort((a, b) => b[key] - a[key]).slice(0, 10).map(view);
     const growth = db.all(
       `SELECT c.id, c.name,
          (SELECT COUNT(*) FROM conversation_members m WHERE m.conversation_id = c.id AND m.joined_at >= ?) AS joined,
@@ -142,18 +154,18 @@ export default function adminAnalytics(r, ctx) {
     );
     res.json({
       range, from, to, bucket, kpis,
-      series: series(rows, from, to, bucket, ['value', 'dm', 'grp', 'channel']),
+      series: series(seriesRows, from, to, bucket, ['value', 'dm', 'grp', 'channel']),
       rankings: {
-        conversations: rank(''),
-        groups: rank("AND c.type = 'group'"),
-        channels: rank("AND c.type = 'channel'"),
-        spaces,
+        conversations: top(rows, 'messages'),
+        groups: top(rows.filter((r) => r.type === 'group'), 'messages'),
+        channels: top(rows.filter((r) => r.type === 'channel'), 'messages'),
+        spaces: [...bySpace.values()].sort((a, b) => b.messages - a.messages).slice(0, 10),
         fastestGrowingGroups: growth,
-        mediaHeavy: rank('', 'HAVING media > 0', 'media'),
-        fileHeavy: rank('', 'HAVING files > 0', 'files'),
+        mediaHeavy: top(rows, 'media'),
+        fileHeavy: top(rows, 'files'),
         storageConsumers,
       },
-      spanMs: span,
+      spanMs: to - from,
     });
   }));
 

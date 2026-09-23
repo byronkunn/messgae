@@ -268,7 +268,8 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS messages_conv ON messages(conversation_id, created_at, id);
 CREATE INDEX IF NOT EXISTS messages_thread ON messages(thread_id, created_at, id);
-CREATE INDEX IF NOT EXISTS messages_created ON messages(created_at);
+-- Covering index for time-range analytics (no table lookups needed).
+CREATE INDEX IF NOT EXISTS messages_created_cover ON messages(created_at, conversation_id, kind, sender_id);
 CREATE INDEX IF NOT EXISTS messages_sender ON messages(sender_id, created_at);
 
 CREATE TABLE IF NOT EXISTS message_attachments (
