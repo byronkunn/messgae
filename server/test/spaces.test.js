@@ -130,8 +130,30 @@ test('explore lists discoverable public Spaces only; preview before joining', as
   const msgs = await outsider.get(`/api/conversations/${gen.id}/messages`);
   assert.equal(msgs.status, 200, 'public Space channels can be previewed');
   assert.equal((await outsider.post(`/api/conversations/${gen.id}/messages`, { body: 'x' })).status, 403);
+  // Attachments in a previewable channel can be opened; ones in private channels cannot.
+  const { PNG } = await import('./helpers.js');
+  const up = await member.upload('shot.png', PNG);
+  await member.post(`/api/conversations/${byName('media').id}/messages`, { fileIds: [up.data.file.id] });
+  assert.equal((await outsider.get(`/api/files/${up.data.file.id}/content`, { raw: true })).status, 200);
+  const vipUp = await mod.upload('secret.png', Buffer.concat([PNG, Buffer.from('x')]));
+  const staffCh = (await mod.get(`/api/spaces/${spaceId}`)).data.channels.find((c) => c.name === 'moderators');
+  await mod.post(`/api/conversations/${staffCh.id}/messages`, { fileIds: [vipUp.data.file.id] });
+  assert.equal((await outsider.get(`/api/files/${vipUp.data.file.id}/content`)).status, 404);
+  assert.equal((await member.get(`/api/files/${vipUp.data.file.id}/content`)).status, 404);
   const topics = await outsider.get('/api/explore?tab=topics');
   assert.equal(topics.data.topics.find((t) => t.topic === 'cars').spaces, 1);
+});
+
+test('vanity invite links are a Space Pro feature', async () => {
+  const denied = await owner.post(`/api/spaces/${spaceId}/invites`, { vanityCode: 'jdm-garage' });
+  assert.equal(denied.status, 402);
+  srv.ctx.db.run("UPDATE spaces SET plan = 'pro' WHERE id = ?", spaceId);
+  const ok = await owner.post(`/api/spaces/${spaceId}/invites`, { vanityCode: 'jdm-garage' });
+  assert.equal(ok.status, 201);
+  assert.equal(ok.data.invite.code, 'JDM-GARAGE');
+  assert.equal((await owner.post(`/api/spaces/${spaceId}/invites`, { vanityCode: 'JDM-GARAGE' })).status, 400);
+  assert.equal((await outsider.get('/api/invites/jdm-garage')).data.space.name, 'JDM Garage');
+  assert.equal((await member.post(`/api/spaces/${spaceId}/invites`, { vanityCode: 'mine' })).status, 403);
 });
 
 test('space reports reach space moderators; ownership transfer', async () => {

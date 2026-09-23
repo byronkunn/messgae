@@ -418,14 +418,20 @@ function Invites({ data }) {
   const { handleError, toast } = useApp();
   const { space } = data;
   const [invites, setInvites] = useState(null);
-  const [form, setForm] = useState({ expiresInHours: '168', maxUses: '' });
+  const [form, setForm] = useState({ expiresInHours: '168', maxUses: '', vanityCode: '' });
+  const pro = space.plan === 'pro';
   const load = useCallback(() => api.get(`/api/spaces/${space.id}/invites`).then((r) => setInvites(r.invites)).catch(handleError), [space.id, handleError]);
   useEffect(() => {
     load();
   }, [load]);
   const create = async () => {
     try {
-      const r = await api.post(`/api/spaces/${space.id}/invites`, { expiresInHours: form.expiresInHours ? Number(form.expiresInHours) : undefined, maxUses: form.maxUses ? Number(form.maxUses) : undefined });
+      const r = await api.post(`/api/spaces/${space.id}/invites`, {
+        expiresInHours: form.expiresInHours ? Number(form.expiresInHours) : undefined,
+        maxUses: form.maxUses ? Number(form.maxUses) : undefined,
+        vanityCode: form.vanityCode.trim() || undefined,
+      });
+      setForm({ ...form, vanityCode: '' });
       await copyText(`${location.origin}/invite/${r.invite.code}`);
       toast('Invite created and copied');
       load();
@@ -440,6 +446,9 @@ function Invites({ data }) {
           <Field label="Expires"><select className="input" value={form.expiresInHours} onChange={(e) => setForm({ ...form, expiresInHours: e.target.value })}><option value="1">1 hour</option><option value="24">1 day</option><option value="168">7 days</option><option value="">Never</option></select></Field>
           <Field label="Max uses"><input className="input" type="number" min="1" value={form.maxUses} placeholder="Unlimited" onChange={(e) => setForm({ ...form, maxUses: e.target.value })} /></Field>
         </div>
+        <Field label="Vanity link (Space Pro)" hint={pro ? 'Letters, numbers and dashes, e.g. JDM-GARAGE.' : 'Upgrade to Space Pro for custom invite links.'}>
+          <input className="input" value={form.vanityCode} disabled={!pro} placeholder="JDM-GARAGE" onChange={(e) => setForm({ ...form, vanityCode: e.target.value.replace(/[^A-Za-z0-9-]/g, '') })} maxLength={32} />
+        </Field>
         <button className="btn btn-primary btn-sm" onClick={create}>Create invite link</button>
       </div>
       {!invites ? <Loading /> : !invites.length ? <Empty icon="link" title="No active invites" /> : invites.map((i) => (

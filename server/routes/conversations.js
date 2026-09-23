@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { h, str, bad, forbidden, notFound, int, bool, oneOf, parseJson } from '../lib/http.js';
+import { h, str, bad, forbidden, notFound, int, bool, oneOf, parseJson, HttpError } from '../lib/http.js';
 import { requireUser, notRestricted } from '../lib/auth.js';
 import { conversationAccess, requireCan, GROUP_ROLE_RANK, parseSettings, isBlockedEitherWay } from '../lib/perms.js';
 import { canMessage, miniUser, publicProfile, privacyOf, notify, audienceAllows } from '../lib/users.js';
@@ -688,8 +688,15 @@ export default function conversationRoutes(ctx) {
   return r;
 }
 
-export function createInvite(db, targetType, targetId, userId, body = {}) {
-  const code = randomBase32(10);
+export function createInvite(db, targetType, targetId, userId, body = {}, { allowVanity = false } = {}) {
+  let code = randomBase32(10);
+  if (body.vanityCode) {
+    if (!allowVanity) throw new HttpError(402, 'plan_required', 'Vanity invite links are part of Space Pro.');
+    code = str(body.vanityCode, 'Vanity code', { min: 3, max: 32, pattern: /^[A-Za-z0-9-]+$/ }).toUpperCase();
+    const existing = db.get('SELECT revoked_at FROM invites WHERE code = ?', code);
+    if (existing && !existing.revoked_at) throw bad('That invite link is already taken.');
+    if (existing) db.run('DELETE FROM invites WHERE code = ?', code);
+  }
   const hours = body.expiresInHours ? int(body.expiresInHours, 'Expiry', { min: 1, max: 24 * 365 }) : null;
   const maxUses = body.maxUses ? int(body.maxUses, 'Max uses', { min: 1, max: 100000 }) : null;
   db.run(

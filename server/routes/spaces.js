@@ -641,7 +641,8 @@ export default function spaceRoutes(ctx) {
     notRestricted(req);
     const { space, sp } = load(req);
     need(sp, P.CREATE_INVITES, 'You cannot create invites in this Space.');
-    const invite = createInvite(db, 'space', space.id, req.user.id, req.body);
+    if (req.body.vanityCode) need(sp, P.MANAGE_INVITES, 'Only invite managers can create vanity links.');
+    const invite = createInvite(db, 'space', space.id, req.user.id, req.body, { allowVanity: space.plan === 'pro' });
     spaceAudit(db, space.id, req.user.id, 'invite.create', invite.code);
     res.status(201).json({ invite: inviteView(invite) });
   }));

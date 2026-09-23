@@ -30,7 +30,8 @@ export function fileAccess(db, userId, file) {
   );
   for (const u of uses) {
     const a = conversationAccess(db, userId, u.conversation_id, { allowMissing: true });
-    if (a?.can.view && !(a.member?.cleared_at && u.created_at <= a.member.cleared_at)) return { ok: true, via: 'conversation' };
+    // Members, and people previewing a public group/Space channel, can open what they can see.
+    if ((a?.can.view || a?.preview) && !(a.member?.cleared_at && u.created_at <= a.member.cleared_at)) return { ok: true, via: 'conversation' };
   }
   if (!file.purged_at && file.category === 'image' && isPublicImage(db, file.id)) return { ok: true, via: 'public_image' };
   return { ok: false };
