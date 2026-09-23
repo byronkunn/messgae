@@ -30,6 +30,7 @@ export function str(value, name, { min = 0, max = 1000, trim = true, pattern } =
   if (typeof value !== 'string') throw bad(`${name} must be text.`);
   let v = trim ? value.trim() : value;
   // Strip control characters other than newline/tab.
+  // eslint-disable-next-line no-control-regex -- stripping control characters is intentional
   v = v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
   if (v.length < min) throw bad(min === 1 ? `${name} is required.` : `${name} must be at least ${min} characters.`);
   if (v.length > max) throw bad(`${name} must be at most ${max} characters.`);

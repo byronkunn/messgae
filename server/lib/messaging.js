@@ -286,7 +286,10 @@ export function sendMessage(ctx, user, access, input) {
   // Notifications for mentions and replies.
   const convName = conv.type === 'dm' ? null : conv.name;
   const notified = new Set();
+  // People who muted the sender don't get notified by them.
+  const mutedBy = new Set(db.all('SELECT user_id FROM user_mutes WHERE muted_id = ?', user.id).map((r) => r.user_id));
   const canSee = (uid) => {
+    if (mutedBy.has(uid)) return false;
     if (conv.type === 'channel') return !!(channelPerms(db, conv, uid).perms & P.VIEW_CHANNEL);
     return !!db.get('SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?', conv.id, uid);
   };

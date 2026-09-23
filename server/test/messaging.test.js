@@ -137,3 +137,29 @@ test('polls and stickers', async () => {
   const st = await bob.post(`/api/conversations/${id}/messages`, { sticker: 'wave' });
   assert.equal(st.data.message.kind, 'sticker');
 });
+
+test('muting a user suppresses their mention notifications', async () => {
+  const g = await alice.post('/api/conversations/groups', { name: 'Mute room', memberIds: [bob.user.id] });
+  const id = g.data.conversation.id;
+  await bob.put(`/api/users/${alice.user.id}/mute`);
+  const before = (await bob.get('/api/notifications')).data.notifications.length;
+  await alice.post(`/api/conversations/${id}/messages`, { body: 'hey @bob are you there?' });
+  assert.equal((await bob.get('/api/notifications')).data.notifications.length, before);
+  await bob.del(`/api/users/${alice.user.id}/mute`);
+  await alice.post(`/api/conversations/${id}/messages`, { body: 'now @bob?' });
+  assert.equal((await bob.get('/api/notifications')).data.notifications.length, before + 1);
+});
+
+test('restricted accounts can only use direct messages', async () => {
+  const g = await alice.post('/api/conversations/groups', { name: 'Restricted room', memberIds: [bob.user.id] });
+  srv.ctx.db.run("UPDATE users SET state = 'restricted', state_until = ? WHERE id = ?", Date.now() + 3600_000, bob.user.id);
+  const r = await bob.post(`/api/conversations/${g.data.conversation.id}/messages`, { body: 'hi' });
+  assert.equal(r.status, 403);
+  assert.equal(r.data.error.code, 'account_restricted');
+  assert.equal((await bob.post('/api/spaces', { name: 'Nope Space' })).status, 403);
+  const dm = await bob.post('/api/conversations/dm', { userId: alice.user.id });
+  assert.equal((await bob.post(`/api/conversations/${dm.data.conversation.id}/messages`, { body: 'dm still works' })).status, 201);
+  // Restrictions lift automatically when they expire.
+  srv.ctx.db.run('UPDATE users SET state_until = ? WHERE id = ?', Date.now() - 1, bob.user.id);
+  assert.equal((await bob.post(`/api/conversations/${g.data.conversation.id}/messages`, { body: 'back' })).status, 201);
+});

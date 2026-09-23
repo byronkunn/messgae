@@ -6,9 +6,17 @@ export const DAY = 86400_000;
 
 /** Sensitive admin access must state an investigation reason (body, header or query). */
 export function requireReason(req) {
-  const raw = req.body?.reason || req.get('x-investigation-reason') || req.query.reason;
-  const reason = str(raw ? decodeURIComponent(String(raw)) : '', 'Investigation reason', { min: 5, max: 500 });
-  return reason;
+  const header = req.get('x-investigation-reason');
+  let fromHeader = '';
+  if (header) {
+    try {
+      fromHeader = decodeURIComponent(header);
+    } catch {
+      fromHeader = header;
+    }
+  }
+  const raw = req.body?.reason || fromHeader || req.query.reason || '';
+  return str(String(raw), 'Investigation reason', { min: 5, max: 500 });
 }
 
 /** Parses ?range=1h|24h|7d|30d|90d|custom&from=&to= into a time window and bucket size. */

@@ -72,6 +72,7 @@ export function streamFile(ctx, req, res, file, { download = false, eventType, u
   res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
   res.setHeader('Cache-Control', 'private, max-age=300');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  if (req.method === 'HEAD') return res.end();
   const type = eventType || (inline ? 'view' : 'download');
   const stream = ctx.blobs.read(blob);
   let sent = 0;
@@ -88,7 +89,6 @@ export function streamFile(ctx, req, res, file, { download = false, eventType, u
     ctx.db.run(`UPDATE files SET ${counter} = ${counter} + 1, bandwidth_bytes = bandwidth_bytes + ? WHERE id = ?`, sent, file.id);
     onComplete?.(sent);
   });
-  if (req.method === 'HEAD') return res.end();
   stream.pipe(res);
 }
 

@@ -15,7 +15,8 @@
     "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.js",
     "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
     "make-admin": "node --disable-warning=ExperimentalWarning scripts/make-admin.js",
-    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 server/test/*.test.js"
+    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 server/test/*.test.js",
+    "lint": "eslint ."
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
@@ -24,7 +25,12 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

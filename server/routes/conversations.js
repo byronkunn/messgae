@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { h, str, bad, forbidden, notFound, int, bool, oneOf, HttpError, parseJson } from '../lib/http.js';
+import { h, str, bad, forbidden, notFound, int, bool, oneOf, parseJson } from '../lib/http.js';
 import { requireUser, notRestricted } from '../lib/auth.js';
 import { conversationAccess, requireCan, GROUP_ROLE_RANK, parseSettings, isBlockedEitherWay } from '../lib/perms.js';
 import { canMessage, miniUser, publicProfile, privacyOf, notify, audienceAllows } from '../lib/users.js';
@@ -35,6 +35,7 @@ export function conversationSummary(ctx, conv, userId, member) {
     );
     const me = db.get('SELECT * FROM users WHERE id = ?', userId);
     out.otherUser = other ? publicProfile(ctx, other, userId) : null;
+    if (out.otherUser?.muted) out.muted = true;
     out.name = other?.display_name || 'Deleted user';
     out.avatarFileId = other?.avatar_file_id || null;
     if (other && member && receiptsVisible(me, other)) {
@@ -192,7 +193,7 @@ export default function conversationRoutes(ctx) {
 
   r.patch('/:id', h((req, res) => {
     const a = access(req);
-    const { conv, can } = a;
+    const { conv } = a;
     if (conv.type === 'dm') throw bad('Direct messages have no shared settings.');
     const b = req.body || {};
     const updates = {};

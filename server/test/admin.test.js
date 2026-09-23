@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { startServer, makeStaff, elevate, ZIP } from './helpers.js';
 
 let srv, superAdmin, admin, moderator, alice, bob;
-let adminSecret, superSecret, modSecret;
+let adminSecret, superSecret;
 let dmId, fileId, msgId;
 
 before(async () => {
@@ -16,7 +16,7 @@ before(async () => {
   await bob.register('Bob', 'bob');
   superSecret = await makeStaff(srv, superAdmin, 'super_admin');
   adminSecret = await makeStaff(srv, admin, 'site_admin', { evidence: true });
-  modSecret = await makeStaff(srv, moderator, 'site_moderator');
+  await makeStaff(srv, moderator, 'site_moderator');
 
   const dm = await alice.post('/api/conversations/dm', { userId: bob.user.id });
   dmId = dm.data.conversation.id;

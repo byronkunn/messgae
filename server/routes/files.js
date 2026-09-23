@@ -6,7 +6,7 @@ import { requireUser, notRestricted } from '../lib/auth.js';
 import { detectFileType } from '../lib/filetype.js';
 import { makeVerifier, checkVerifier, seal } from '../lib/crypto.js';
 import {
-  requireFileAccess, requireOwner, streamFile, purgeFile, issueTicket, checkTicket, createFileRecord,
+  requireFileAccess, streamFile, purgeFile, issueTicket, checkTicket, createFileRecord,
 } from '../lib/files.js';
 import { fileSummary } from '../lib/messaging.js';
 import { usageFor, planOf } from './me.js';
@@ -25,6 +25,7 @@ const CATEGORY_FILTERS = {
 
 export function cleanFilename(name) {
   const base = String(name || 'file').split(/[\\/]/).pop();
+  // eslint-disable-next-line no-control-regex -- stripping control characters is intentional
   const cleaned = base.replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '_').replace(/^\.+/, '').trim().slice(0, 200);
   return cleaned || 'file';
 }

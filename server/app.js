@@ -114,7 +114,6 @@ export function createApp({ dbFile, dataDir } = {}) {
     app.get(/^\/(?!api|ws).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
   }
 
-  // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, _next) => {
     if (err?.code === 'LIMIT_FILE_SIZE') err = new HttpError(413, 'too_large', 'File is larger than your upload limit.');
     if (err?.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request body too large.');
